@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { parseHygCsv, ParsedStar } from "./data/csvParser";
 import { StarCanvas } from "./starCanvas";
-import TokyoSiderealClock from "./localSiderealTime";
 
 export default function StarMapPage() {
   const [stars, setStars] = useState<ParsedStar[]>([]);
