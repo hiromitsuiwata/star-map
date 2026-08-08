@@ -1,16 +1,17 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { parseHygCsv, ParsedStar } from "./data/csvParser";
 import { StarCanvas } from "./starCanvas";
+import TokyoSiderealClock from "./localSiderealTime";
 
 export default function StarMapPage() {
   const [stars, setStars] = useState<ParsedStar[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 例：public/hyg_v44.csv から自動ロードする場合
+  // 例：public/hyg_named.csv から自動ロードする場合
   useEffect(() => {
-    fetch("/hyg_v44.csv") // publicフォルダにCSVを配置
+    fetch("/hyg_named.csv") // publicフォルダにCSVを配置
       .then((res) => res.text())
       .then((csvText) => {
         return parseHygCsv(csvText);
@@ -30,7 +31,7 @@ export default function StarMapPage() {
   return (
     <div>
       <p>読み込み完了: {stars.length} 個の星</p>
-      <StarCanvas stars={stars} width={1600} height={1200} />
+      <StarCanvas stars={stars} width={900} height={900} />
     </div>
   );
 };

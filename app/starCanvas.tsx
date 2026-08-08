@@ -1,7 +1,12 @@
 'use client';
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ParsedStar } from "./data/csvParser";
+
+// 東京の経度 (東経139.7414度)
+const TOKYO_LON = 139.7414;
+// 東京の緯度 (北緯35.6581度)
+const TOKYO_LAT = 35.6581;
 
 interface StarCanvasProps {
   stars: ParsedStar[];
@@ -9,10 +14,49 @@ interface StarCanvasProps {
   height: number;
 }
 
-export const StarCanvas: React.FC<StarCanvasProps> = ({stars, width, height}) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+/**
+ * ミリ秒（UTC）からユリウス日（JD）を計算
+ */
+function getJulianDate(ms: number): number {
+  return (ms / 86400000) + 2440587.5;
+}
 
-  // Canvasへの高速一括描画
+/**
+ * 地方恒星時 (LST) を計算する（戻り値：時間単位の数値）
+ */
+function calculateLST(ms: number, longitude: number): number {
+  const jd = getJulianDate(ms);
+  const d = jd - 2451545.0; // J2000.0からの経過日数
+
+  // グリニッジ平均恒星時 (GMST) の簡略計算式 (時間単位)
+  let gmst = 18.697374558 + 24.06570982441908 * d;
+  gmst = gmst % 24;
+  if (gmst < 0) gmst += 24;
+
+  // 地方恒星時 (LST) = GMST + (経度 / 15)
+  let lst = gmst + (longitude / 15);
+  lst = lst % 24;
+  if (lst < 0) lst += 24;
+
+  return lst;
+}
+
+export const StarCanvas: React.FC<StarCanvasProps> = ({ stars, width, height }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [now, setNow] = useState(new Date());
+
+  // 1分ごとに現在時刻を更新
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+    }, 60000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const lstHours = calculateLST(now.getTime(), TOKYO_LON);
+
+  // Canvasへの描画処理
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -20,16 +64,15 @@ export const StarCanvas: React.FC<StarCanvasProps> = ({stars, width, height}) =>
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const rMax = canvas.width / 2 - 20; // 地平線の半径
+    const cx = width / 2;
+    const cy = height / 2;
+    const rMax = Math.min(width, height) / 2 - 25; // 地平線の半径（余白調整）
 
-    // 東京の緯度と仮の地方恒星時
-    const lat = 35.6 * Math.PI / 180;
-    const lst = 18.5;
+    // 東京の緯度（ラジアン）
+    const lat = TOKYO_LAT * Math.PI / 180;
 
     // 描画エリアのクリア
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, width, height);
 
     // 1. 背景の円と十字線（地平線・方位線）の描画
     ctx.strokeStyle = '#1e272c';
@@ -38,7 +81,7 @@ export const StarCanvas: React.FC<StarCanvasProps> = ({stars, width, height}) =>
     ctx.beginPath(); ctx.moveTo(cx, cy - rMax); ctx.lineTo(cx, cy + rMax); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(cx - rMax, cy); ctx.lineTo(cx + rMax, cy); ctx.stroke();
 
-    // 方位ラベル
+    // 方位ラベル（見上げ星図：上が北のとき、左が東、右が西）
     ctx.fillStyle = '#576574';
     ctx.font = '14px sans-serif';
     ctx.fillText('北', cx - 7, cy - rMax - 8);
@@ -46,53 +89,59 @@ export const StarCanvas: React.FC<StarCanvasProps> = ({stars, width, height}) =>
     ctx.fillText('東', cx - rMax - 22, cy + 5);
     ctx.fillText('西', cx + rMax + 10, cy + 5);
 
-    // すべての星を1回のループで一気に描画(DOMを汚さない)
+    // すべての星のループ描画
     stars.forEach(star => {
-      const ha = (lst - star.ra) * 15 * Math.PI / 180;
+      // 時角 HA の計算
+      // ※ star.ra が「時単位(0-24)」と想定。度単位なら (lstHours * 15 - star.ra) に変更してください
+      const ha = (lstHours - star.ra) * 15 * Math.PI / 180;
       const decRad = star.dec * Math.PI / 180;
 
-      // 天体座標から地平座標への計算
+      // 天体座標から地平座標（高度 alt）への計算
       const sinAlt = Math.sin(decRad) * Math.sin(lat) + Math.cos(decRad) * Math.cos(lat) * Math.cos(ha);
-      const alt = Math.asin(sinAlt);
+      const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt))); // 念のためクランプ
 
-      // 地平線の下にある星は描画しない
+      // 地平線の下にある星（高度が0未満）は描画しない
       if (alt < 0) return;
 
-      const cosAz = (Math.sin(decRad) - Math.sin(alt) * Math.sin(lat)) / (Math.cos(alt) * Math.cos(lat));
-      let az = Math.acos(Math.min(1, Math.max(-1, cosAz)));
-      if (Math.sin(ha) > 0) az = Math.PI * 2 - az;
+      // 方位角 az の計算（安全確実な atan2 を使用した北基準式）
+      const Y = Math.sin(ha);
+      const X = Math.cos(ha) * Math.sin(lat) - Math.tan(decRad) * Math.cos(lat);
+      let az = Math.atan2(Y, X) + Math.PI; // 北基準にするため π を加算
 
       // 正距方位図法による画面上のXYマッピング
+      // 天頂からの角距離に比例する半径 r
       const r = rMax * (1 - alt / (Math.PI / 2));
-      const x = cx + r * Math.sin(az);
+      
+      // 見上げ星図（左が東、右が西）にするため、X軸はマイナスにする
+      const x = cx - r * Math.sin(az);
       const y = cy - r * Math.cos(az);
 
-      // 等級に応じた星のドットサイズ
-      const size = Math.max(1, 5 - star.mag);
-
       // 星のドットを描画
-      // ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      // ctx.arc(x, y, size, 0, Math.PI * 2);
-      // ctx.fill();
-      ctx.fillStyle = star.colorHex;
-      // 簡易的に四角(または円)で星を描画
-      ctx.arc(x, y, star.size, 0, Math.PI * 2);
+      ctx.fillStyle = star.colorHex || '#ffffff';
+      ctx.arc(x, y, star.size || 2, 0, Math.PI * 2);
       ctx.fill();
 
       // 日本語の星の名前を描画
-      ctx.fillStyle = '#48dbfb';
-      ctx.font = '11px sans-serif';
-      if (star.name) ctx.fillText(star.name, x + 6, y + 4);
+      if (star.name) {
+        ctx.fillStyle = '#48dbfb';
+        ctx.font = '11px sans-serif';
+        ctx.fillText(star.name, x + 6, y + 4);
+      }
     });
-  }, []);
+  }, [stars, width, height, lstHours]); // 依存配列に lstHours を追加して毎分再描画
 
- return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      style={{ display: 'block', width: '100%', height: '100%' }}
-    />
+  return (
+    <div>
+      <h3>東京 地方恒星時クロック</h3>
+      <strong>現在時刻 (JST):</strong> {now.toLocaleString('ja-JP')}<br />
+      <strong>地方恒星時 (LST hours):</strong> {lstHours.toFixed(4)}
+      <br />
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+      />
+    </div>
   );
 };
