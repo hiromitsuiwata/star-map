@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ParsedStar } from "./data/csvParser";
+import { convertEquatorialToHorizontal } from "./data/celestial";
 
 // 東京の経度 (東経139.7414度)
 const TOKYO_LON = 139.7414;
@@ -141,32 +142,21 @@ export const StarCanvas: React.FC<StarCanvasProps> = ({
 
     // すべての星のループ描画
     stars.forEach((star) => {
-      // 時角 HA の計算
-      // ※ star.ra が「時単位(0-24)」と想定。度単位なら (lstHours * 15 - star.ra) に変更してください
-      const ha = ((lstHours - star.ra) * 15 * Math.PI) / 180;
-      const decRad = (star.dec * Math.PI) / 180;
+      const horizontalPosition = convertEquatorialToHorizontal(
+        star,
+        lstHours,
+        lat,
+      )!;
 
-      // 天体座標から地平座標（高度 alt）への計算
-      const sinAlt =
-        Math.sin(decRad) * Math.sin(lat) +
-        Math.cos(decRad) * Math.cos(lat) * Math.cos(ha);
-      const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt))); // 念のためクランプ
-
-      // 地平線の下にある星（高度が0未満）は描画しない
-      if (alt < 0) return;
-
-      // 方位角 az の計算（安全確実な atan2 を使用した北基準式）
-      const Y = Math.sin(ha);
-      const X = Math.cos(ha) * Math.sin(lat) - Math.tan(decRad) * Math.cos(lat);
-      let az = Math.atan2(Y, X) + Math.PI; // 北基準にするため π を加算
+      if (!horizontalPosition) return; // 地平線の下にある星は描画しない
 
       // 正距方位図法による画面上のXYマッピング
       // 天頂からの角距離に比例する半径 r
-      const r = rMax * (1 - alt / (Math.PI / 2));
+      const r = rMax * (1 - horizontalPosition.alt / (Math.PI / 2));
 
       // 見上げ星図（左が東、右が西）にするため、X軸はマイナスにする
-      const x = cx - r * Math.sin(az);
-      const y = cy - r * Math.cos(az);
+      const x = cx - r * Math.sin(horizontalPosition.az);
+      const y = cy - r * Math.cos(horizontalPosition.az);
 
       // 星のドットを描画
       ctx.beginPath();
