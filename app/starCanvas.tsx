@@ -1,13 +1,13 @@
+// StarCanvas.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { ParsedStar } from "./data/csvParser";
 import { convertEquatorialToHorizontal } from "./data/celestial";
 import { calculateLST } from "./data/time";
+import { PROJECTIONS } from "./data/projections";
 
-// 東京の経度 (東経139.7414度)
 const TOKYO_LON = 139.7414;
-// 東京の緯度 (北緯35.6581度)
 const TOKYO_LAT = 35.6581;
 
 interface StarCanvasProps {
@@ -23,133 +23,94 @@ export const StarCanvas: React.FC<StarCanvasProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [now, setNow] = useState(new Date());
+  const [projectionType, setProjectionType] = useState<string>("azimuthal");
 
-  // 1分ごとに現在時刻を更新
   useEffect(() => {
-    const timer = setInterval(() => {
-      setNow(new Date());
-    }, 60000);
-
+    const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
-  // 東京の緯度（ラジアン）
   const lat = (TOKYO_LAT * Math.PI) / 180;
-  // 地方恒星時 (LST) の計算
   const lstHours = calculateLST(now.getTime(), TOKYO_LON);
 
-  // Canvasへの描画処理
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const cx = width / 2;
     const cy = height / 2;
-    const rMax = Math.min(width, height) / 2 - 25; // 地平線の半径（余白調整）
+    const rMax = Math.min(width, height) / 2 - 25;
 
-    // 描画エリアのクリア
+    const currentProjection =
+      PROJECTIONS[projectionType] || PROJECTIONS.azimuthal;
+
+    // キャンバスのクリア
     ctx.clearRect(0, 0, width, height);
 
-    // 1. 背景の円と十字線（地平線・方位線）の描画
-    ctx.strokeStyle = "#1e272c";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, rMax, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - rMax);
-    ctx.lineTo(cx, cy + rMax);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - rMax, cy);
-    ctx.lineTo(cx + rMax, cy);
-    ctx.stroke();
+    // 1. 図法固有の背景・ガイド線・ラベルを一発で描画
+    currentProjection.drawBackground(ctx, cx, cy, rMax);
 
-    // 方位ラベル（見上げ星図：上が北のとき、左が東、右が西）
-    ctx.fillStyle = "#576574";
-    ctx.font = "14px sans-serif";
-    ctx.fillText("北", cx - 7, cy - rMax - 8);
-    ctx.fillText("南", cx - 7, cy + rMax + 20);
-    ctx.fillText("東", cx - rMax - 22, cy + 5);
-    ctx.fillText("西", cx + rMax + 10, cy + 5);
-
-    // --- ここから座標線の描画 ---
-    ctx.strokeStyle = "#2c3a47"; // 線の色（星より目立たない暗めの色）
-    ctx.lineWidth = 0.5; // 細い線
-    ctx.fillStyle = "#576574"; // 高度ラベルの文字色
-    ctx.font = "10px sans-serif";
-
-    // 1. 高度線
-    const altLines = [15, 30, 45, 60, 75];
-    altLines.forEach((altDeg) => {
-      const altRad = (altDeg * Math.PI) / 180;
-      // 天頂からの角距離に比例する半径
-      const r = rMax * (1 - altRad / (Math.PI / 2));
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 高度のラベルを描画（北側の線上に配置）
-      ctx.fillText(`${altDeg}°`, cx + 4, cy - r - 4);
-    });
-
-    // 2. 方位線（15度刻み、ただし東西南北の0,90,180,270は除く）
-    for (let azDeg = 15; azDeg < 360; azDeg += 15) {
-      if (azDeg % 90 === 0) continue; // 東西南北はすでに十字線を引いているのでスキップ
-
-      const azRad = (azDeg * Math.PI) / 180;
-
-      // 見上げ星図（左が東、右が西）の向きに合わせる
-      const targetX = cx - rMax * Math.sin(azRad);
-      const targetY = cy - rMax * Math.cos(azRad);
-
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(targetX, targetY);
-      ctx.stroke();
-    }
-    // --- ここまで座標線の描画 ---
-
-    // すべての星のループ描画
+    // 2. 星の描画
     stars.forEach((star) => {
       const horizontalPosition = convertEquatorialToHorizontal(
         star,
         lstHours,
         lat,
-      )!;
+      );
+      if (!horizontalPosition || horizontalPosition.alt < 0) return;
 
-      if (!horizontalPosition) return; // 地平線の下にある星は描画しない
+      const pt = currentProjection.project(
+        horizontalPosition.az,
+        horizontalPosition.alt,
+        cx,
+        cy,
+        rMax,
+      );
+      if (!pt) return;
 
-      // 正距方位図法による画面上のXYマッピング
-      // 天頂からの角距離に比例する半径 r
-      const r = rMax * (1 - horizontalPosition.alt / (Math.PI / 2));
-
-      // 見上げ星図（左が東、右が西）にするため、X軸はマイナスにする
-      const x = cx - r * Math.sin(horizontalPosition.az);
-      const y = cy - r * Math.cos(horizontalPosition.az);
-
-      // 星のドットを描画
       ctx.beginPath();
       ctx.fillStyle = star.colorHex || "#ffffff";
-      ctx.arc(x, y, star.size || 2, 0, Math.PI * 2);
+      ctx.arc(pt.x, pt.y, star.size || 2, 0, Math.PI * 2);
       ctx.fill();
 
-      // 日本語の星の名前を描画
       if (star.name) {
         ctx.fillStyle = "#48dbfb";
         ctx.font = "11px sans-serif";
-        ctx.fillText(star.name, x + 6, y + 4);
+        ctx.fillText(star.name, pt.x + 6, pt.y + 4);
       }
     });
-  }, [stars, width, height, lstHours]); // 依存配列に lstHours を追加して毎分再描画
+  }, [stars, width, height, lstHours, projectionType]);
 
   return (
     <div>
       <h3>東京 地方恒星時クロック</h3>
+      <div style={{ marginBottom: "15px" }}>
+        <label
+          htmlFor="projection-select"
+          style={{ marginRight: "10px", fontWeight: "bold" }}
+        >
+          表示図法:
+        </label>
+        <select
+          id="projection-select"
+          value={projectionType}
+          onChange={(e) => setProjectionType(e.target.value)}
+          style={{
+            padding: "4px 8px",
+            borderRadius: "4px",
+            background: "#2c3a47",
+            color: "#fff",
+          }}
+        >
+          {Object.entries(PROJECTIONS).map(([key, proj]) => (
+            <option key={key} value={key}>
+              {proj.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <strong>現在時刻 (JST):</strong> {now.toLocaleString("ja-JP")}
       <br />
       <strong>地方恒星時 (LST hours):</strong> {lstHours.toFixed(4)}
