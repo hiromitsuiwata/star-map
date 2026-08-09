@@ -33,11 +33,11 @@ export const StarCanvas: React.FC<StarCanvasProps> = ({
   const isDragging = useRef<boolean>(false);
   const lastMousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // 【修正】1秒ごとに現在時刻を更新してCanvasをカチカチ再描画させる
+  // 60秒ごとに現在時刻を更新してCanvasをカチカチ再描画させる
   useEffect(() => {
     const timer = setInterval(() => {
       setNow(new Date());
-    }, 1000);
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
 
