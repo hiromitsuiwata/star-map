@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from "react";
 import { parseHygCsv, ParsedStar } from "./data/csvParser";
@@ -30,7 +30,7 @@ export default function StarMapPage() {
   return (
     <div>
       <p>読み込み完了: {stars.length} 個の星</p>
-      <StarCanvas stars={stars} width={900} height={900} />
+      <StarCanvas stars={stars} width={1000} height={1000} />
     </div>
   );
-};
+}

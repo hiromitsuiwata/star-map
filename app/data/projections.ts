@@ -50,7 +50,7 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = "#1abc9c"; // 図法の違いが分かりやすいように色分け
+        ctx.fillStyle = "#1abc9c";
         ctx.fillText(`${altDeg}°`, cx + 4, cy - r - 4);
       });
 
@@ -86,7 +86,7 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = "#3498db";
+        ctx.fillStyle = "#1abc9c";
         ctx.fillText(`${altDeg}°`, cx + 4, cy - r - 4);
       });
 
@@ -110,7 +110,7 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
     },
     drawBackground: (ctx, cx, cy, rMax) => {
       // 心射図法は無限に広がるため外枠の丸は描かない
-      ctx.strokeStyle = "#1e272c";
+      ctx.strokeStyle = "#2c3a47";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(cx, cy - rMax);
@@ -136,7 +136,7 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = "#e74c3c";
+        ctx.fillStyle = "#1abc9c";
         ctx.fillText(`${altDeg}°`, cx + 4, cy - r - 4);
       });
 
@@ -181,14 +181,14 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
       const maxAltRad = (85 * Math.PI) / 180;
       const maxHeight = R * Math.log(Math.tan(Math.PI / 4 + maxAltRad / 2));
 
-      ctx.strokeStyle = "#1e272c";
+      ctx.strokeStyle = "#2c3a47";
       ctx.lineWidth = 1;
       ctx.strokeRect(left, bottom - maxHeight, width, maxHeight + 25);
 
       // --- 座標グリッドの描画 ---
       ctx.strokeStyle = "#2c3a47";
       ctx.lineWidth = 0.5;
-      ctx.fillStyle = "#576574";
+      ctx.fillStyle = "#1abc9c";
       ctx.font = "10px sans-serif";
 
       // 1. 高度線（水平な直線。高高度ほど間隔が広がる）
@@ -206,7 +206,7 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
       });
 
       // 2. 地平線（ベースライン）
-      ctx.strokeStyle = "#1e272c";
+      ctx.strokeStyle = "#2c3a47";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(left, bottom);
@@ -308,9 +308,9 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
       );
 
       // グリッド線の基本スタイル（薄い青白色）
-      ctx.strokeStyle = "rgba(72, 219, 251, 0.08)";
+      ctx.strokeStyle = "#2c3a47";
       ctx.lineWidth = 0.5;
-      ctx.fillStyle = "rgba(72, 219, 251, 0.4)";
+      ctx.fillStyle = "#1abc9c";
       ctx.font = "9px sans-serif";
 
       // --- 1. 高度線（横の同心円・緯度線）の描画 ---
@@ -425,7 +425,7 @@ export const PROJECTIONS: Record<string, ProjectionProfile> = {
         { name: "南", az: 180 },
         { name: "西", az: 270 },
       ];
-      ctx.fillStyle = "#e74c3c";
+      ctx.fillStyle = "#1abc9c";
       ctx.font = "bold 13px sans-serif";
       directionLabels.forEach((dir) => {
         const pt = PROJECTIONS.planetarium.project(
@@ -474,7 +474,7 @@ function drawLabels(
   cy: number,
   rMax: number,
 ) {
-  ctx.fillStyle = "#576574";
+  ctx.fillStyle = "#1abc9c";
   ctx.font = "14px sans-serif";
   ctx.fillText("北", cx - 7, cy - rMax - 8);
   ctx.fillText("南", cx - 7, cy + rMax + 20);
