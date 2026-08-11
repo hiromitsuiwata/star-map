@@ -128,7 +128,12 @@ export const StarCanvas: React.FC<StarCanvasProps> = ({
         if (star.name) {
           ctx.fillStyle = "#48dbfb";
           ctx.font = "11px sans-serif";
-          ctx.fillText(star.name, pt.x + 6, pt.y + 4);
+
+          let text = star.name;
+          if (star.japaneseProperName && star.japaneseConstellationName) {
+            text += ` (${star.japaneseProperName}, ${star.japaneseConstellationName})`;
+          }
+          ctx.fillText(text, pt.x + 6, pt.y + 4);
         }
       }
     });

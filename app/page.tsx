@@ -1,28 +1,61 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { parseHygCsv, ParsedStar } from "./data/csvParser";
+import {
+  parseHygCsv,
+  ParsedStar,
+  parseIauNamedStarsCsv,
+} from "./data/csvParser";
 import { StarCanvas } from "./starCanvas";
 
 export default function StarMapPage() {
   const [stars, setStars] = useState<ParsedStar[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 例：public/hyg_named.csv から自動ロードする場合
   useEffect(() => {
-    fetch("/hyg_named.csv") // publicフォルダにCSVを配置
-      .then((res) => res.text())
-      .then((csvText) => {
-        return parseHygCsv(csvText);
-      })
-      .then((parsedData) => {
-        setStars(parsedData);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("星データのロードに失敗:", err);
-        setLoading(false);
+    const loadStars = async () => {
+      console.log("Fetching star data...");
+
+      // それぞれのCSVをフェッチ
+      const [hyg, wikipediaNames] = await Promise.all([
+        fetch("/hyg_named.csv").then((res) => res.text()),
+        fetch("/wikipedia_proper_names.csv").then((res) => res.text()),
+      ]);
+
+      // それぞれをパースして整形
+      const [hygData, namesData] = await Promise.all([
+        parseHygCsv(hyg),
+        parseIauNamedStarsCsv(wikipediaNames),
+      ]);
+
+      // 名前データをMapに変換する。キーは固有名とする
+      const namesMap = new Map(
+        namesData.map((star) => [star.englishProperName, star]),
+      );
+
+      // ベースのデータに日本語データを横方向にマージする
+      console.log("Merging star data with names...");
+
+      const mergedStars = hygData.map((star) => {
+        if (star.name) {
+          const namedStar = namesMap.get(star.name);
+          if (namedStar) {
+            return {
+              ...star,
+              japaneseProperName: namedStar.japaneseProperName,
+              japaneseConstellationName: namedStar.constellationName,
+              bayerDesignation: namedStar.bayerDesignation,
+            };
+          }
+        }
+        return star;
       });
+
+      setStars(mergedStars);
+      setLoading(false);
+    };
+
+    loadStars();
   }, []);
 
   if (loading) return <div>星のデータを読み込み中...</div>;
